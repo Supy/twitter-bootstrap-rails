@@ -1,21 +1,21 @@
 /* =============================================================
- * bootstrap-typeahead.js v2.0.4
- * http://twitter.github.com/bootstrap/javascript.html#typeahead
- * =============================================================
- * Copyright 2012 Twitter, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- * ============================================================ */
+* bootstrap-typeahead.js v2.0.3
+* http://twitter.github.com/bootstrap/javascript.html#typeahead
+* =============================================================
+* Copyright 2012 Twitter, Inc.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+* http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+* ============================================================ */
 
 
 !function($){
@@ -24,7 +24,7 @@
 
 
  /* TYPEAHEAD PUBLIC CLASS DEFINITION
-  * ================================= */
+* ================================= */
 
   var Typeahead = function (element, options) {
     this.$element = $(element)
@@ -35,6 +35,8 @@
     this.updater = this.options.updater || this.updater
     this.$menu = $(this.options.menu).appendTo('body')
     this.source = this.options.source
+    this.onselect = this.options.onselect
+    this.strings = true
     this.shown = false
     this.listen()
   }
@@ -44,10 +46,17 @@
     constructor: Typeahead
 
   , select: function () {
-      var val = this.$menu.find('.active').attr('data-value')
-      this.$element
-        .val(this.updater(val))
-        .change()
+      var val = JSON.parse(this.$menu.find('.active').attr('data-value'))
+            , text
+
+      if (!this.strings) text = val[this.options.property]
+      else text = val
+
+      this.$element.val(this.updater(text)).change()
+
+      if (typeof this.onselect == "function")
+          this.onselect(val)
+
       return this.hide()
     }
 
@@ -56,7 +65,7 @@
     }
 
   , show: function () {
-      var pos = $.extend({}, this.$element.offset(), {
+      var pos = $.extend({}, this.$element.position(), {
         height: this.$element[0].offsetHeight
       })
 
@@ -80,6 +89,25 @@
       var that = this
         , items
         , q
+        , value
+
+      this.query = this.$element.val()
+
+      if (typeof this.source == "function")
+        value = this.source(this, this.query)
+        if (value)
+          this.process(value)
+      else
+        this.process(this.source)
+    }
+
+  , process: function (results) {
+      var that = this
+        , items
+        , q
+
+      if (results.length && typeof results[0] != "string")
+          this.strings = false
 
       this.query = this.$element.val()
 
@@ -87,7 +115,10 @@
         return this.shown ? this.hide() : this
       }
 
-      items = $.grep(this.source, function (item) {
+      items = $.grep(results, function (item) {
+        if (!that.strings)
+          item = item[that.options.property]
+        
         return that.matcher(item)
       })
 
@@ -109,10 +140,14 @@
         , caseSensitive = []
         , caseInsensitive = []
         , item
+        , sortby
 
       while (item = items.shift()) {
-        if (!item.toLowerCase().indexOf(this.query.toLowerCase())) beginswith.push(item)
-        else if (~item.indexOf(this.query)) caseSensitive.push(item)
+        if (this.strings) sortby = item
+        else sortby = item[this.options.property]
+
+        if (!sortby.toLowerCase().indexOf(this.query.toLowerCase())) beginswith.push(item)
+        else if (~sortby.indexOf(this.query)) caseSensitive.push(item)
         else caseInsensitive.push(item)
       }
 
@@ -130,7 +165,9 @@
       var that = this
 
       items = $(items).map(function (i, item) {
-        i = $(that.options.item).attr('data-value', item)
+        i = $(that.options.item).attr('data-value', JSON.stringify(item))
+        if (!that.strings)
+            item = item[that.options.property]
         i.find('a').html(that.highlighter(item))
         return i[0]
       })
@@ -164,9 +201,9 @@
 
   , listen: function () {
       this.$element
-        .on('blur',     $.proxy(this.blur, this))
+        .on('blur', $.proxy(this.blur, this))
         .on('keypress', $.proxy(this.keypress, this))
-        .on('keyup',    $.proxy(this.keyup, this))
+        .on('keyup', $.proxy(this.keyup, this))
 
       if ($.browser.webkit || $.browser.msie) {
         this.$element.on('keydown', $.proxy(this.keypress, this))
@@ -195,7 +232,7 @@
           break
 
         default:
-          this.lookup()
+          this.lookup();
       }
 
       e.stopPropagation()
@@ -230,11 +267,7 @@
 
   , blur: function (e) {
       var that = this
-      setTimeout(function () {
-        if (!that.$menu.is(':hover')) {
-          that.hide();
-        }
-      }, 150)
+      setTimeout(function () { that.hide() }, 150)
     }
 
   , click: function (e) {
@@ -252,7 +285,7 @@
 
 
   /* TYPEAHEAD PLUGIN DEFINITION
-   * =========================== */
+* =========================== */
 
   $.fn.typeahead = function (option) {
     return this.each(function () {
@@ -269,13 +302,15 @@
   , items: 8
   , menu: '<ul class="typeahead dropdown-menu"></ul>'
   , item: '<li><a href="#"></a></li>'
+  , onselect: null
+  , property: 'value'
   }
 
   $.fn.typeahead.Constructor = Typeahead
 
 
  /* TYPEAHEAD DATA-API
-  * ================== */
+* ================== */
 
   $(function () {
     $('body').on('focus.typeahead.data-api', '[data-provide="typeahead"]', function (e) {
